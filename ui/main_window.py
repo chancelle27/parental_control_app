@@ -1,74 +1,140 @@
-from PyQt5.QtWidgets import QMainWindow, QWidget, QPushButton, QVBoxLayout, QApplication, QFrame, QLabel
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
+    QStackedWidget, QHBoxLayout, QListWidget, QListWidgetItem
+)
+from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt
+from ui.widgets.site_blocker_widget import BlockSitesPage
+from ui.widgets.app_blocker_widget import BlockAppsPage
+from ui.widgets.screen_time_widget import ScreenTimeWidget
+import sys
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        # Configuration de la fenêtre principale
-        self.setWindowTitle("Parental Control App")
-        self.setGeometry(100, 100, 500, 350)
-
-        # Définir une couleur de fond
-        self.setStyleSheet("background-color: #f0f0f0;")
-
-        # Widget central
-        central_widget = QWidget(self)
+        
+        self.setWindowTitle("Contrôle Parental")
+        self.setGeometry(100, 100, 900, 600)
+        self.setStyleSheet("background-color: #f5f6fa;")  # Fond clair et moderne
+        
+        central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
-        # Layout pour organiser les boutons
-        layout = QVBoxLayout(central_widget)
-
-        # Titre avec un joli style
-        self.title_label = QLabel("Contrôle Parental", self)
-        self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333; margin-bottom: 20px;")
-        layout.addWidget(self.title_label)
-
-        # Création d'un cadre avec une bordure pour chaque section
-        self.create_button(layout, "Bloquer Sites", "site_icon.png", self.block_sites)
-        self.create_button(layout, "Bloquer Applications", "app_icon.png", self.block_apps)
-        self.create_button(layout, "Gérer Temps d'écran", "time_icon.png", self.manage_screen_time)
-        self.create_button(layout, "Afficher Rapports", "report_icon.png", self.show_reports)
-
-    def create_button(self, layout, text, icon_path, callback):
-        # Créer un cadre avec un bouton à l'intérieur
-        frame = QFrame(self)
-        frame.setStyleSheet("background-color: white; border-radius: 10px; margin: 10px; padding: 10px;")
-        button = QPushButton(text, frame)
-        button.setIcon(QIcon(icon_path))  # Ajout d'une icône
-        button.setIconSize(button.sizeHint())  # Ajustement de la taille de l'icône
-        button.clicked.connect(callback)
-
-        # Style du bouton
-        button.setStyleSheet("""
-            QPushButton {
-                font-size: 18px;
-                background-color: #4CAF50;
+        
+        layout = QHBoxLayout(central_widget)
+        layout.setSpacing(0)  # Supprime l'espace entre la sidebar et le contenu
+        layout.setContentsMargins(0, 0, 0, 0)  # Supprime les marges
+        
+        # Sidebar minimaliste
+        self.sidebar = QListWidget()
+        self.sidebar.setFixedWidth(200)  # Largeur fixe pour la sidebar
+        self.sidebar.setStyleSheet("""
+            QListWidget {
+                background-color: #2c3e50;  # Fond sombre pour la sidebar
                 color: white;
+                font-size: 16px;
                 border: none;
-                border-radius: 10px;
-                padding: 15px;
+                padding: 10px 0;
             }
-            QPushButton:hover {
-                background-color: #45a049;
+            QListWidget::item {
+                padding: 15px 20px;
+                border-radius: 0;
+                border-left: 4px solid transparent;
+            }
+            QListWidget::item:selected {
+                background-color: #34495e;  # Couleur de fond pour l'élément sélectionné
+                border-left: 4px solid #3498db;  # Bordure gauche bleue pour l'élément sélectionné
+                color: white;
+                font-weight: bold;
+            }
+            QListWidget::item:hover {
+                background-color: #34495e;  # Couleur de fond au survol
             }
         """)
+        
+        # Pages disponibles dans la sidebar
+        pages = [
+            ("Accueil", "home"),
+            ("Blocage de Sites", "block_sites"),
+            ("Blocage d'Applications", "block_apps"),
+            ("Temps d'Écran", "screen_time"),
+            ("Rapports", "reports")
+        ]
+        
+        for name, key in pages:
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, key)
+            self.sidebar.addItem(item)
+        
+        self.sidebar.currentItemChanged.connect(self.change_page)
+        
+        # Zone principale avec StackedWidget
+        self.stack = QStackedWidget()
+        self.stack.setStyleSheet("background-color: white; border-left: 1px solid #dfe6e9;")  # Fond blanc avec une bordure
+        
+        self.pages = {
+            "home": self.create_home_page(),
+            "block_sites": BlockSitesPage(),  # Couleur rouge
+            "block_apps": BlockAppsPage(),  # Couleur violette
+            "screen_time": ScreenTimeWidget(),  # Couleur verte
+            "reports": self.create_page("Rapports", "#2980b9")  # Couleur bleue
+        }
+        
+        for page in self.pages.values():
+            self.stack.addWidget(page)
+        
+        layout.addWidget(self.sidebar)
+        layout.addWidget(self.stack, 1)  # Le contenu prend tout l'espace restant
+        
+        # Sélectionner la première page par défaut
+        self.sidebar.setCurrentRow(0)
+        self.stack.setCurrentWidget(self.pages["home"])
+    
+    def create_home_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignCenter)
+        
+        title = QLabel("Bienvenue dans le Contrôle Parental")
+        title.setFont(QFont("Arial", 24, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: #2c3e50; margin-bottom: 20px;")
+        layout.addWidget(title)
+        
+        description = QLabel("Utilisez la barre latérale pour naviguer entre les différentes fonctionnalités.")
+        description.setFont(QFont("Arial", 14))
+        description.setAlignment(Qt.AlignCenter)
+        description.setStyleSheet("color: #7f8c8d;")
+        layout.addWidget(description)
+        
+        return page
+    
+    def create_page(self, title_text, color):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignCenter)
+        
+        title = QLabel(title_text)
+        title.setFont(QFont("Arial", 22, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(f"color: {color}; margin-bottom: 20px;")
+        layout.addWidget(title)
+        
+        # Exemple de contenu supplémentaire
+        content = QLabel(f"Page dédiée à la fonctionnalité : {title_text}")
+        content.setFont(QFont("Arial", 14))
+        content.setAlignment(Qt.AlignCenter)
+        content.setStyleSheet("color: #7f8c8d;")
+        layout.addWidget(content)
+        
+        return page
+    
+    def change_page(self, current_item):
+        if current_item:
+            page_key = current_item.data(Qt.UserRole)
+            self.stack.setCurrentWidget(self.pages[page_key])
 
-        # Ajouter le bouton dans le cadre, puis le cadre dans le layout
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.addWidget(button)
-        layout.addWidget(frame)
-
-    def block_sites(self):
-        print("Bloquage des sites activé...")
-
-    def block_apps(self):
-        print("Blocage des applications activé...")
-
-    def manage_screen_time(self):
-        print("Gestion du temps d'écran activée...")
-
-    def show_reports(self):
-        print("Affichage des rapports activé...")
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())

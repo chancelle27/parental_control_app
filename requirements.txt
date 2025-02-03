@@ -3,3 +3,4 @@ sqlite3
 cryptography
 psutil
 requests
+winapps
