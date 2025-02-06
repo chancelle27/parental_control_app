@@ -1,56 +1,44 @@
-# Environnements virtuels
-venv/
-env/
-.env/
-.venv/
-ENV/
-env.bak/
-venv.bak/
 
-# Cache Python
 __pycache__/
 *.py[cod]
-*$py.class
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
 
-# Environnements IDE
+venv/
+env/
+*.venv
+
+.env
+.env.local
+.env.development.local
+
+
+
+*.log
+*.bak
+*.swp
+
+
 .idea/
 .vscode/
-*.swp
-*.swo
 
-# Fichiers spécifiques à macOS
-.DS_Store
 
-# Logs
-*.log
+*.pyc
+*.pyo
+*.qrc
+*.ui.py
 
-# Fichiers de configuration locaux
-.env
-.venv
 
-# Fichiers de backup
-*.bak
-*.gho
-*.ori
-*.orig
-*.tmp
+build/
+dist/
+*.egg-info/
 
-# Fichiers sensibles
-*.key
-*.pem
-*.cert
 
-# Fichiers de profiling et debug
-.coverage
-htmlcov/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
 
-# Jupyter Notebook
-.ipynb_checkpoints
 
-# Fichiers de système
 Thumbs.db
+.DS_Store
