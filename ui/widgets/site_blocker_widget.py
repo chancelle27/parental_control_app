@@ -1,5 +1,8 @@
 import os
 import sys
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
     QListWidget, QMessageBox, QHBoxLayout
@@ -9,6 +12,12 @@ from PyQt5.QtCore import Qt
 
 # Détection du fichier hosts selon l'OS
 HOSTS_PATH = "C:\\Windows\\System32\\drivers\\etc\\hosts" if sys.platform == "win32" else "/etc/hosts"
+
+# Configuration de MailHog
+MAILHOG_SMTP_SERVER = "localhost"
+MAILHOG_SMTP_PORT = 1025
+MAILHOG_FROM_EMAIL = "no-reply@example.com"
+MAILHOG_TO_EMAIL = "admin@example.com"
 
 class BlockSitesPage(QWidget):
     def __init__(self):
@@ -30,7 +39,7 @@ class BlockSitesPage(QWidget):
         # Champ de saisie
         self.site_input = QLineEdit()
         self.site_input.setPlaceholderText("Entrez l'URL du site à bloquer (ex: facebook.com)")
-        self.site_input.setStyleSheet("""
+        self.site_input.setStyleSheet(""" 
             QLineEdit {
                 padding: 10px;
                 font-size: 16px;
@@ -105,7 +114,7 @@ class BlockSitesPage(QWidget):
         
         # Charger les sites bloqués
         self.load_blocked_sites()
-    
+
     def add_blocked_site(self):
         site_url = self.site_input.text().strip()
         if site_url:
@@ -116,8 +125,28 @@ class BlockSitesPage(QWidget):
             self.blocked_sites_list.addItem(site_url)
             self.block_site_in_hosts(site_url)
             self.site_input.clear()
+            # Envoyer un mail de notification
+            self.send_email_notification(site_url)
         else:
             QMessageBox.warning(self, "Erreur", "Veuillez entrer une URL valide.")
+    
+    def send_email_notification(self, site_url):
+        """Envoie un e-mail de notification via MailHog"""
+        subject = f"Tentative d'accès à un site bloqué : {site_url}"
+        body = f"Une tentative d'accès au site bloqué {site_url} a été détectée."
+
+        msg = MIMEMultipart()
+        msg["From"] = MAILHOG_FROM_EMAIL
+        msg["To"] = MAILHOG_TO_EMAIL
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+
+        try:
+            with smtplib.SMTP(MAILHOG_SMTP_SERVER, MAILHOG_SMTP_PORT) as server:
+                server.sendmail(msg["From"], msg["To"], msg.as_string())
+            print(f"Email envoyé pour {site_url}")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur d'envoi du mail : {e}")
 
     def remove_blocked_site(self):
         selected_item = self.blocked_sites_list.currentItem()

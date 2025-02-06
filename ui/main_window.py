@@ -7,6 +7,8 @@ from PyQt5.QtCore import Qt
 from ui.widgets.site_blocker_widget import BlockSitesPage
 from ui.widgets.app_blocker_widget import BlockAppsPage
 from ui.widgets.screen_time_widget import ScreenTimeWidget
+from ui.widgets.auth_page import AuthPage
+from ui.widgets.home_page import HomePage
 import sys
 
 class MainWindow(QMainWindow):
@@ -15,6 +17,7 @@ class MainWindow(QMainWindow):
         
         self.setWindowTitle("Contrôle Parental")
         self.setGeometry(100, 100, 900, 600)
+        self.auth_page = AuthPage(self)
         self.setStyleSheet("background-color: #f5f6fa;")  # Fond clair et moderne
         
         central_widget = QWidget()
