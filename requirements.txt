@@ -6,3 +6,4 @@ PyQt5_sip==12.17.0
 pywin32==308
 setuptools==65.5.0
 winapps==0.2.0
+pyuac==0.0.3

@@ -1,136 +1,115 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton,
-    QGridLayout, QFrame
+    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 )
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
 class HomePage(QWidget):
-    def __init__(self, main_window):
+    def __init__(self):
         super().__init__()
-        self.main_window = main_window
         self.init_ui()
-    
+
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignTop)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
-        
-        # Titre de bienvenue
-        title = QLabel("Tableau de Bord - Contrôle Parental")
+
+        # Titre de la page d'accueil
+        title = QLabel("Bienvenue dans le Contrôle Parental")
         title.setFont(QFont("Arial", 24, QFont.Bold))
         title.setStyleSheet("color: #2c3e50; margin-bottom: 20px;")
-        layout.addWidget(title)
-        
-        # Sous-titre
-        subtitle = QLabel("Gérez facilement la sécurité en ligne de votre famille")
-        subtitle.setFont(QFont("Arial", 14))
-        subtitle.setStyleSheet("color: #7f8c8d; margin-bottom: 30px;")
-        layout.addWidget(subtitle)
-        
-        # Grille de fonctionnalités
-        grid_layout = QGridLayout()
-        grid_layout.setSpacing(20)
-        
-        # Fonctionnalité 1: Blocage de sites
-        sites_card = self.create_feature_card(
-            "Blocage de Sites",
-            "Contrôlez l'accès aux sites web",
-            "#e74c3c",
-            lambda: self.main_window.sidebar.setCurrentRow(1)
+        layout.addWidget(title, alignment=Qt.AlignCenter)
+
+        # Description de l'application
+        description = QLabel(
+            "Cette application vous permet de gérer et de surveiller les activités de vos enfants sur leur appareil. "
+            "Utilisez les fonctionnalités ci-dessous pour commencer."
         )
-        grid_layout.addWidget(sites_card, 0, 0)
-        
-        # Fonctionnalité 2: Blocage d'applications
-        apps_card = self.create_feature_card(
-            "Blocage d'Applications",
-            "Gérez l'utilisation des applications",
-            "#9b59b6",
-            lambda: self.main_window.sidebar.setCurrentRow(2)
-        )
-        grid_layout.addWidget(apps_card, 0, 1)
-        
-        # Fonctionnalité 3: Temps d'écran
-        screen_card = self.create_feature_card(
-            "Temps d'Écran",
-            "Définissez des limites de temps",
-            "#27ae60",
-            lambda: self.main_window.sidebar.setCurrentRow(3)
-        )
-        grid_layout.addWidget(screen_card, 1, 0)
-        
-        # Fonctionnalité 4: Rapports
-        reports_card = self.create_feature_card(
-            "Rapports",
-            "Suivez l'activité en ligne",
-            "#2980b9",
-            lambda: self.main_window.sidebar.setCurrentRow(4)
-        )
-        grid_layout.addWidget(reports_card, 1, 1)
-        
-        layout.addLayout(grid_layout)
-        
-        # Information de sécurité
-        security_note = QLabel("Tous les contrôles sont actifs et fonctionnent correctement")
-        security_note.setFont(QFont("Arial", 12))
-        security_note.setStyleSheet("""
-            color: #27ae60;
-            padding: 15px;
-            background-color: #f0f9f4;
-            border-radius: 5px;
-            margin-top: 20px;
-        """)
-        security_note.setAlignment(Qt.AlignCenter)
-        layout.addWidget(security_note)
-        
-    def create_feature_card(self, title, description, color, on_click):
-        card = QFrame()
+        description.setFont(QFont("Arial", 14))
+        description.setStyleSheet("color: #7f8c8d; margin-bottom: 30px;")
+        description.setWordWrap(True)
+        description.setAlignment(Qt.AlignCenter)
+        layout.addWidget(description)
+
+        # Statistiques ou informations rapides
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
+
+        # Exemple de statistiques (à adapter selon vos besoins)
+        self.add_stat_card(stats_layout, "Applications bloquées", "0", "#e74c3c")
+        self.add_stat_card(stats_layout, "Temps d'écran total", "0h 0m", "#3498db")
+        self.add_stat_card(stats_layout, "Sites bloqués", "0", "#2ecc71")
+
+        layout.addLayout(stats_layout)
+
+        # Boutons de raccourci vers les fonctionnalités principales
+        shortcuts_layout = QHBoxLayout()
+        shortcuts_layout.setSpacing(15)
+
+        self.add_shortcut_button(shortcuts_layout, "Blocage de Sites", "#9b59b6", self.open_block_sites)
+        self.add_shortcut_button(shortcuts_layout, "Blocage d'Apps", "#e67e22", self.open_block_apps)
+        self.add_shortcut_button(shortcuts_layout, "Temps d'Écran", "#1abc9c", self.open_screen_time)
+
+        layout.addLayout(shortcuts_layout)
+
+    def add_stat_card(self, layout, title, value, color):
+        """Ajoute une carte de statistique."""
+        card = QWidget()
         card.setStyleSheet(f"""
-            QFrame {{
-                background-color: white;
-                border-radius: 10px;
-                padding: 20px;
-                border: 1px solid #e0e0e0;
-            }}
-            QFrame:hover {{
-                border: 1px solid {color};
-                background-color: #f8f9fa;
-            }}
+            background-color: {color};
+            border-radius: 10px;
+            padding: 20px;
         """)
-        
         card_layout = QVBoxLayout(card)
-        
-        # Titre de la carte
+        card_layout.setAlignment(Qt.AlignCenter)
+
+        value_label = QLabel(value)
+        value_label.setFont(QFont("Arial", 18, QFont.Bold))
+        value_label.setStyleSheet("color: white;")
+        card_layout.addWidget(value_label)
+
         title_label = QLabel(title)
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
-        title_label.setStyleSheet(f"color: {color};")
+        title_label.setFont(QFont("Arial", 12))
+        title_label.setStyleSheet("color: white;")
         card_layout.addWidget(title_label)
-        
-        # Description
-        desc_label = QLabel(description)
-        desc_label.setFont(QFont("Arial", 12))
-        desc_label.setStyleSheet("color: #7f8c8d;")
-        desc_label.setWordWrap(True)
-        card_layout.addWidget(desc_label)
-        
-        # Bouton d'accès
-        access_button = QPushButton("Accéder")
-        access_button.setStyleSheet(f"""
+
+        layout.addWidget(card)
+
+    def add_shortcut_button(self, layout, text, color, callback):
+        """Ajoute un bouton de raccourci."""
+        button = QPushButton(text)
+        button.setFont(QFont("Arial", 14))
+        button.setStyleSheet(f"""
             QPushButton {{
                 background-color: {color};
                 color: white;
+                padding: 15px;
+                border-radius: 10px;
                 border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-size: 14px;
-                margin-top: 10px;
             }}
             QPushButton:hover {{
-                background-color: {color}dd;
+                background-color: {self.darken_color(color)};
             }}
         """)
-        access_button.clicked.connect(on_click)
-        card_layout.addWidget(access_button)
-        
-        return card
+        button.clicked.connect(callback)
+        layout.addWidget(button)
+
+    def darken_color(self, color):
+        """Assombrit légèrement une couleur hexadécimale."""
+        color = color.lstrip('#')
+        rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        darkened_rgb = tuple(max(0, min(255, int(c * 0.85))) for c in rgb)
+        return f'#{darkened_rgb[0]:02x}{darkened_rgb[1]:02x}{darkened_rgb[2]:02x}'
+
+    def open_block_sites(self):
+        """Ouvre la page de blocage de sites."""
+        print("Ouvrir la page de blocage de sites")
+
+    def open_block_apps(self):
+        """Ouvre la page de blocage d'applications."""
+        print("Ouvrir la page de blocage d'applications")
+
+    def open_screen_time(self):
+        """Ouvre la page de gestion du temps d'écran."""
+        print("Ouvrir la page de gestion du temps d'écran")

@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QTimer
 import winapps
 import psutil
 
-class ScreenTimeWidget(QWidget):
+class ScreenTimePage(QWidget):
     def __init__(self):
         super().__init__()
         self.timer = QTimer()
