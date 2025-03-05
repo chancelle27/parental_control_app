@@ -41,32 +41,56 @@ class BlockSitesPage(QWidget):
         layout.addWidget(title)
         
         # Onglets pour les sites et les mots-clés
+        # Créer un QTabWidget
         self.tabs = QTabWidget()
+
+        # Appliquer le style au QTabWidget
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #bdc3c7;
-                border-radius: 5px;
+                border-radius: 8px;
+                background-color: #ffffff;
+                margin: 0px;
                 padding: 10px;
+               
             }
+            
             QTabBar::tab {
-                padding: 10px;
-                font-size: 16px;
-                background-color: #ecf0f1;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                        stop: 0 #ecf0f1, stop: 1 #bdc3c7);
                 border: 1px solid #bdc3c7;
-                border-radius: 5px;
+                border-bottom-color: #bdc3c7;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                color: #2c3e50;
                 margin-right: 5px;
+                width: 300px;
             }
+            
             QTabBar::tab:selected {
-                background-color: #3498db;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                        stop: 0 #3498db, stop: 1 #2980b9);
+                border: 1px solid #2980b9;
+                border-bottom-color: #ffffff;
+                color: white;
+            }
+            
+            QTabBar::tab:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                        stop: 0 #3498db, stop: 1 #2980b9);
+                border: 1px solid #2980b9;
                 color: white;
             }
         """)
-        
+
         # Onglet pour les sites bloqués
         self.site_tab = QWidget()
         self.init_site_tab()
         self.tabs.addTab(self.site_tab, "Sites Bloqués")
-        
+
         # Onglet pour les mots-clés bloqués
         self.keyword_tab = QWidget()
         self.init_keyword_tab()
