@@ -275,6 +275,17 @@ class BlockSitesPage(QWidget):
             self.send_email_notification(site_url)
         else:
             QMessageBox.warning(self, "Erreur", "Veuillez entrer une URL valide.")
+        try:
+            with open(HOSTS_PATH, "a") as file:
+                file.write(f"127.0.0.1 {site_url}\n")
+                file.write(f"127.0.0.1 www.{site_url}\n")
+            return True
+        except PermissionError:
+            print("Permission refusée. Exécutez le programme en tant qu'administrateur.")
+            return False
+        except Exception as e:
+            print(f"Erreur lors du blocage du site : {e}")
+            return False
     
     def add_blocked_keyword(self):
         keyword = self.keyword_input.text().strip()

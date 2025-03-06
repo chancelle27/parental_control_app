@@ -1,13 +1,16 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QProgressBar, QFrame
 )
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
+import pyqtgraph as pg
+import numpy as np
 
 class HomePage(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
+        self.setup_animations()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -15,13 +18,12 @@ class HomePage(QWidget):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        # Titre de la page d'accueil
+        # Titre et description
         title = QLabel("Bienvenue dans le Contrôle Parental")
         title.setFont(QFont("Arial", 24, QFont.Bold))
         title.setStyleSheet("color: #2c3e50; margin-bottom: 20px;")
         layout.addWidget(title, alignment=Qt.AlignCenter)
 
-        # Description de l'application
         description = QLabel(
             "Cette application vous permet de gérer et de surveiller les activités de vos enfants sur leur appareil. "
             "Utilisez les fonctionnalités ci-dessous pour commencer."
@@ -32,29 +34,68 @@ class HomePage(QWidget):
         description.setAlignment(Qt.AlignCenter)
         layout.addWidget(description)
 
-        # Statistiques ou informations rapides
+        # Statistiques (cartes)
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(20)
-
-        # Exemple de statistiques (à adapter selon vos besoins)
-        self.add_stat_card(stats_layout, "Applications bloquées", "0", "#e74c3c")
-        self.add_stat_card(stats_layout, "Temps d'écran total", "0h 0m", "#3498db")
-        self.add_stat_card(stats_layout, "Sites bloqués", "0", "#2ecc71")
-
+        self.add_stat_card(stats_layout, "Applications bloquées", "12", "#e74c3c")
+        self.add_stat_card(stats_layout, "Temps d'écran total", "3h 45m", "#3498db")
+        self.add_stat_card(stats_layout, "Sites bloqués", "8", "#2ecc71")
         layout.addLayout(stats_layout)
 
-        # Boutons de raccourci vers les fonctionnalités principales
-        shortcuts_layout = QHBoxLayout()
-        shortcuts_layout.setSpacing(15)
+        # Barre de progression pour le temps d'écran
+        self.screen_time_progress = QProgressBar()
+        self.screen_time_progress.setRange(0, 100)
+        self.screen_time_progress.setValue(45)  # 45% du temps d'écran utilisé
+        self.screen_time_progress.setFormat("Temps d'écran utilisé: %p%")
+        self.screen_time_progress.setStyleSheet("""
+            QProgressBar {
+                background-color: #ecf0f1;
+                border-radius: 10px;
+                text-align: center;
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QProgressBar::chunk {
+                background-color: #3498db;
+                border-radius: 10px;
+            }
+        """)
+        layout.addWidget(self.screen_time_progress)
 
-        self.add_shortcut_button(shortcuts_layout, "Blocage de Sites", "#9b59b6", self.open_block_sites)
-        self.add_shortcut_button(shortcuts_layout, "Blocage d'Apps", "#e67e22", self.open_block_apps)
-        self.add_shortcut_button(shortcuts_layout, "Temps d'Écran", "#1abc9c", self.open_screen_time)
 
-        layout.addLayout(shortcuts_layout)
+
+        # Section des graphiques
+        graph_section = QHBoxLayout()
+        graph_section.setSpacing(20)
+        
+        # Graphique linéaire : évolution du temps d'écran sur la semaine
+        self.line_chart = pg.PlotWidget(title="Évolution du Temps d'Écran (min)")
+        self.line_chart.setBackground('#ecf0f1')
+        days = np.arange(1, 8)  # Jours 1 à 7
+        screen_time = np.array([120, 150, 100, 180, 200, 90, 130])
+        pen = pg.mkPen(color='#3498db', width=2)
+        self.line_chart.plot(days, screen_time, pen=pen, symbol='o', symbolSize=8, symbolBrush=('#3498db'))
+        self.line_chart.setLabel('left', 'Temps (min)')
+        self.line_chart.setLabel('bottom', 'Jour')
+        graph_section.addWidget(self.line_chart)
+        
+        # Graphique à barres : utilisation des applications
+        self.bar_chart = pg.PlotWidget(title="Utilisation des Applications")
+        self.bar_chart.setBackground('#ecf0f1')
+        apps = ['YouTube', 'Chrome', 'Games', 'Messenger']
+        usage = np.array([50, 80, 30, 60])
+        indices = np.arange(len(apps))
+        bg = pg.BarGraphItem(x=indices, height=usage, width=0.6, brush='#e74c3c')
+        self.bar_chart.addItem(bg)
+        # Personnalisation de l'axe bas avec les noms des applications
+        self.bar_chart.getAxis('bottom').setTicks([list(zip(indices, apps))])
+        self.bar_chart.setLabel('left', 'Utilisations')
+        self.bar_chart.setLabel('bottom', 'Applications')
+        graph_section.addWidget(self.bar_chart)
+        
+        layout.addLayout(graph_section)
 
     def add_stat_card(self, layout, title, value, color):
-        """Ajoute une carte de statistique."""
         card = QWidget()
         card.setStyleSheet(f"""
             background-color: {color};
@@ -74,10 +115,11 @@ class HomePage(QWidget):
         title_label.setStyleSheet("color: white;")
         card_layout.addWidget(title_label)
 
+        # Animation de fondu pour la carte
+        self.animate_card(card)
         layout.addWidget(card)
 
     def add_shortcut_button(self, layout, text, color, callback):
-        """Ajoute un bouton de raccourci."""
         button = QPushButton(text)
         button.setFont(QFont("Arial", 14))
         button.setStyleSheet(f"""
@@ -96,20 +138,32 @@ class HomePage(QWidget):
         layout.addWidget(button)
 
     def darken_color(self, color):
-        """Assombrit légèrement une couleur hexadécimale."""
         color = color.lstrip('#')
         rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
         darkened_rgb = tuple(max(0, min(255, int(c * 0.85))) for c in rgb)
         return f'#{darkened_rgb[0]:02x}{darkened_rgb[1]:02x}{darkened_rgb[2]:02x}'
 
+    def animate_card(self, card):
+        animation = QPropertyAnimation(card, b"windowOpacity")
+        animation.setDuration(1000)
+        animation.setStartValue(0)
+        animation.setEndValue(1)
+        animation.setEasingCurve(QEasingCurve.InOutQuad)
+        animation.start()
+
+    def setup_animations(self):
+        self.progress_animation = QPropertyAnimation(self.screen_time_progress, b"value")
+        self.progress_animation.setDuration(2000)
+        self.progress_animation.setStartValue(0)
+        self.progress_animation.setEndValue(45)
+        self.progress_animation.setEasingCurve(QEasingCurve.OutQuad)
+        self.progress_animation.start()
+
     def open_block_sites(self):
-        """Ouvre la page de blocage de sites."""
         print("Ouvrir la page de blocage de sites")
 
     def open_block_apps(self):
-        """Ouvre la page de blocage d'applications."""
         print("Ouvrir la page de blocage d'applications")
 
     def open_screen_time(self):
-        """Ouvre la page de gestion du temps d'écran."""
         print("Ouvrir la page de gestion du temps d'écran")

@@ -1,34 +1,42 @@
-import socketserver
-from http.server import SimpleHTTPRequestHandler
-from urllib.parse import urlparse
-import json
+from mitmproxy import http
+import re
 
-BLOCKED_SITES_FILE = "blocked_sites.json"
+# Liste des sites bloqués
+BLOCKED_SITES = {"facebook.com", "youtube.com", "tiktok.com"}
 
-# Charger la liste des sites bloqués
-def load_blocked_sites():
-    try:
-        with open(BLOCKED_SITES_FILE, "r") as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return []
+# Liste des mots-clés interdits
+BLOCKED_KEYWORDS = {"casino", "porno", "betting"}
 
-class ProxyHandler(SimpleHTTPRequestHandler):
-    def do_GET(self):
-        blocked_sites = load_blocked_sites()
-        parsed_url = urlparse(self.path)
-        hostname = parsed_url.netloc
-        
-        if any(blocked in hostname for blocked in blocked_sites):
-            self.send_response(403)
-            self.end_headers()
-            self.wfile.write(b"Access Denied: This site is blocked.")
-            return
-        
-        super().do_GET()
+# URL de redirection vers la page de blocage
+REDIRECT_PAGE = "http://127.0.0.1:5000/block_page"
 
-if __name__ == "__main__":
-    PORT = 8080
-    with socketserver.TCPServer(("", PORT), ProxyHandler) as httpd:
-        print(f"Proxy running on port {PORT}...")
-        httpd.serve_forever()
+
+def request(flow: http.HTTPFlow):
+    """ Intercepte les requêtes et bloque les sites interdits """
+    url = flow.request.pretty_url
+
+    # Vérifier si le site est bloqué
+    if any(blocked in url for blocked in BLOCKED_SITES):
+        flow.response = http.Response.make(
+            302,  # Redirection
+            b"",  # Pas de contenu
+            {"Location": REDIRECT_PAGE}
+        )
+        flow.kill()  # Stoppe immédiatement la requête
+
+
+def response(flow: http.HTTPFlow):
+    """ Intercepte les réponses et filtre le contenu """
+    if flow.response and flow.response.content:
+        try:
+            content = flow.response.content.decode("utf-8", errors="ignore")
+
+            # Vérifier si des mots-clés bloqués sont présents
+            if any(re.search(r"\b" + re.escape(keyword) + r"\b", content, re.IGNORECASE) for keyword in BLOCKED_KEYWORDS):
+                flow.response = http.Response.make(
+                    302,
+                    b"",
+                    {"Location": REDIRECT_PAGE}
+                )
+        except Exception as e:
+            print(f"Erreur lors du traitement du contenu : {e}")

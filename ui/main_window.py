@@ -13,6 +13,7 @@ from ui.widgets.screen_time_widget import ScreenTimePage
 from ui.widgets.site_blocker_widget import BlockSitesPage
 from ui.widgets.home_page import HomePage
 from ui.widgets.settings_page import SettingsPage
+from ui.widgets.reports_page import ReportPage
 
 # Fenêtre principale
 class MainWindow(QMainWindow):
@@ -54,7 +55,7 @@ class MainWindow(QMainWindow):
             "block_sites": BlockSitesPage(),
             "block_apps": BlockAppsPage(),
             "screen_time": ScreenTimePage(),
-            "reports": self.create_page("Rapports", "#2980b9"),
+            "reports": ReportPage(),
             "settings": SettingsPage()
         }
 
