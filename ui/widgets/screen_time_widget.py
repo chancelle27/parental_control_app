@@ -12,6 +12,9 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
 import winapps
 import psutil
+import win32api
+from win32com.client import GetObject
+import pythoncom
 
 class ScreenTimePage(QWidget):
     def __init__(self):
@@ -23,15 +26,28 @@ class ScreenTimePage(QWidget):
         self.elapsed_time = 0
         self.time_limit = 0  # Temps limite en secondes
         self.usage_data = {}  # Stockage des données d'utilisation
-        self.tracked_processes = {}  # Processus actuellement suivis
-        
+        self.tracked_processes = {}  # Processus actuellement suivis (clé = nom d'application)
+        self.exe_to_name_cache = {}  # Cache pour les correspondances EXE -> Nom
+        self.system_processes = self.get_system_processes()
+
         # Créer le dossier de données s'il n'existe pas
         os.makedirs("data", exist_ok=True)
-        
+
         # Charger les données d'utilisation précédentes
         self.load_usage_data()
-        
+
+        # Construire le mapping des applications installées (nom, install_location)
+        self.installed_apps = self.get_installed_apps_data()
+
         self.init_ui()
+        
+    def get_system_processes(self):
+        """Retourne un ensemble de processus système à ignorer"""
+        return {
+            "svchost.exe", "explorer.exe", "Taskmgr.exe",
+            "SearchIndexer.exe", "dwm.exe", "winlogon.exe"
+        }
+
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -84,6 +100,92 @@ class ScreenTimePage(QWidget):
 
         layout.addWidget(tabs)
 
+    def get_installed_apps_data(self):
+        """Retourne une liste de tuples (nom, chemin) des applications installées."""
+        apps = []
+        
+        # 1. Détection via winapps
+        try:
+            for app in winapps.search_installed():
+                if app.name:
+                    paths = set()
+                    if app.install_location and os.path.exists(app.install_location):
+                        paths.add(os.path.normcase(os.path.abspath(app.install_location)))
+                    if app.exe and os.path.exists(app.exe):
+                        exe_path = os.path.normcase(os.path.abspath(app.exe))
+                        paths.add(os.path.dirname(exe_path))
+                        self.exe_to_name_cache[os.path.basename(exe_path).lower()] = app.name
+                    
+                    for path in paths:
+                        apps.append((app.name, path))
+        except Exception as e:
+            print(f"Erreur winapps: {str(e)}")
+
+        # 2. Détection des applications UWP
+        try:
+            pythoncom.CoInitialize()
+            root = GetObject("winmgmts:root\cimv2")
+            processes = root.ExecQuery("SELECT * FROM Win32_Process")
+            
+            for p in processes:
+                if p.ExecutablePath and 'WindowsApps' in p.ExecutablePath:
+                    try:
+                        name = os.path.basename(p.ExecutablePath).split('!')[-1]
+                        path = os.path.dirname(p.ExecutablePath)
+                        apps.append((name, path))
+                        
+                        exe_name = os.path.basename(p.ExecutablePath).lower()
+                        self.exe_to_name_cache[exe_name] = name
+                    except Exception as e:
+                        print(f"Erreur traitement UWP: {str(e)}")
+        except Exception as e:
+            print(f"Erreur détection UWP: {str(e)}")
+        finally:
+            pythoncom.CoUninitialize()
+
+        # Éliminer les doublons et trier
+        unique_apps = []
+        seen = set()
+        
+        for app in apps:
+            if app[0] not in seen:
+                seen.add(app[0])
+                unique_apps.append(app)
+        
+        return sorted(unique_apps, key=lambda x: x[0].lower())
+
+    def get_app_from_process(self, exe_path):
+        """Version améliorée avec cache et métadonnées EXE"""
+        if not exe_path:
+            return None
+        
+        # Vérification du cache
+        exe_name = os.path.basename(exe_path).lower()
+        if exe_name in self.exe_to_name_cache:
+            return self.exe_to_name_cache[exe_name]
+        
+        # Recherche dans les métadonnées de l'exécutable
+        try:
+            info = win32api.GetFileVersionInfo(exe_path, '\\')
+            name = info.get('FileDescription') or info.get('ProductName')
+            if name:
+                self.exe_to_name_cache[exe_name] = name
+                return name
+        except:
+            pass
+        
+        # Recherche par correspondance de chemin
+        norm_exe = os.path.normcase(os.path.abspath(exe_path))
+        for app_name, install_path in self.installed_apps:
+            if norm_exe.startswith(install_path):
+                self.exe_to_name_cache[exe_name] = app_name
+                return app_name
+        
+        # Fallback: nom du fichier sans extension
+        base_name = os.path.splitext(os.path.basename(exe_path))[0]
+        self.exe_to_name_cache[exe_name] = base_name
+        return base_name
+
     def setup_manual_tracking_tab(self, tab):
         layout = QVBoxLayout(tab)
         layout.setSpacing(15)
@@ -96,7 +198,7 @@ class ScreenTimePage(QWidget):
         layout.addWidget(QLabel("Sélectionnez une application :"))
         layout.addWidget(self.app_selector)
 
-        # Charger les applications installées
+        # Charger les applications installées dans le sélecteur
         self.load_installed_apps()
 
         # Affichage du temps passé
@@ -135,7 +237,7 @@ class ScreenTimePage(QWidget):
 
         # Affichage des applications en cours d'exécution
         layout.addWidget(QLabel("Applications actuellement suivies :"))
-        
+
         self.active_apps_table = QTableWidget(0, 3)
         self.active_apps_table.setHorizontalHeaderLabels(["Application", "Temps aujourd'hui", "Limite"])
         self.active_apps_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -157,7 +259,7 @@ class ScreenTimePage(QWidget):
         """)
         layout.addWidget(self.active_apps_table)
 
-        # Boutons pour démarrer/arrêter le suivi automatique
+        # Bouton pour démarrer/arrêter le suivi automatique
         self.auto_track_button = QPushButton("Démarrer le suivi automatique")
         self.auto_track_button.setStyleSheet(self.get_button_style("#3498db"))
         self.auto_track_button.clicked.connect(self.toggle_auto_tracking)
@@ -214,21 +316,19 @@ class ScreenTimePage(QWidget):
         self.app_selector.clear()
         self.app_selector.addItem("-- Sélectionnez une application --")
         
-        try:
-            # Ajouter les applications installées
-            for app in winapps.search_installed():
-                self.app_selector.addItem(app.name)
-            
-            # Ajouter également les processus en cours d'exécution
-            for proc in psutil.process_iter(['name']):
-                try:
-                    proc_name = proc.info['name']
-                    if proc_name and proc_name not in [self.app_selector.itemText(i) for i in range(self.app_selector.count())]:
-                        self.app_selector.addItem(proc_name)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-        except Exception as e:
-            QMessageBox.warning(self, "Erreur", f"Impossible de charger les applications : {str(e)}")
+        # Créer un ensemble pour éviter les doublons
+        unique_apps = set()
+        
+        # Ajouter les applications détectées
+        for app_name, _ in self.installed_apps:
+            if app_name and app_name not in unique_apps:
+                unique_apps.add(app_name)
+                self.app_selector.addItem(app_name)
+        
+        # Si aucune application n'a été trouvée
+        if self.app_selector.count() == 1:
+            self.app_selector.addItem("Aucune application trouvée")
+            self.app_selector.setEnabled(False)
 
     def select_app(self):
         """Met à jour l'application sélectionnée."""
@@ -244,7 +344,7 @@ class ScreenTimePage(QWidget):
     def update_time_label(self):
         """Met à jour l'affichage du temps passé."""
         if self.elapsed_time < 60:
-            pass   # self.time_label.setText(f"Temps passé : {self.elapsed_time} secondes")
+            self.time_label.setText(f"Temps passé : {self.elapsed_time} secondes")
         elif self.elapsed_time < 3600:
             minutes = self.elapsed_time // 60
             seconds = self.elapsed_time % 60
@@ -261,32 +361,31 @@ class ScreenTimePage(QWidget):
             if not self.current_app:
                 QMessageBox.warning(self, "Erreur", "Sélectionnez d'abord une application.")
                 return
-                
+
             limit_minutes = int(self.time_limit_input.text())
             if limit_minutes < 0:
                 raise ValueError("La limite doit être positive")
-                
+
             self.time_limit = limit_minutes * 60  # Convertir en secondes
-            
+
             # Mettre à jour la limite dans les données d'utilisation
-            today = datetime.now().strftime("%Y-%m-%d")
             if self.current_app not in self.usage_data:
                 self.usage_data[self.current_app] = {"days": {}, "limit": self.time_limit}
             else:
                 self.usage_data[self.current_app]["limit"] = self.time_limit
-            
+
             # Sauvegarder les données
             self.save_usage_data()
-            
+
             QMessageBox.information(self, "Succès", f"Limite de temps définie à {limit_minutes} minutes pour {self.current_app}.")
-            
+
             # Mettre à jour l'affichage des statistiques
             self.update_stats()
         except ValueError as e:
             QMessageBox.warning(self, "Erreur", f"Veuillez entrer un nombre valide : {str(e)}")
 
     def toggle_tracking(self):
-        """Démarre ou arrête le suivi du temps."""
+        """Démarre ou arrête le suivi du temps pour l'application sélectionnée."""
         if not self.current_app or self.app_selector.currentIndex() == 0:
             QMessageBox.warning(self, "Erreur", "Veuillez sélectionner une application.")
             return
@@ -301,28 +400,28 @@ class ScreenTimePage(QWidget):
         else:
             # Démarrer le suivi
             self.start_time = time.time()
-            self.timer.start(1000)  # Mettre à jour toutes les secondes
+            self.timer.start(1000)  # Mise à jour toutes les secondes
             self.toggle_tracking_button.setText("Arrêter le suivi")
             self.toggle_tracking_button.setStyleSheet(self.get_button_style("#e74c3c"))
 
     def toggle_auto_tracking(self):
-        """Démarre ou arrête le suivi automatique."""
+        """Démarre ou arrête le suivi automatique des applications en cours d'exécution."""
         if self.auto_tracking_active:
             self.auto_timer.stop()
             self.auto_track_button.setText("Démarrer le suivi automatique")
             self.auto_track_button.setStyleSheet(self.get_button_style("#3498db"))
             self.auto_tracking_active = False
-            
+
             # Enregistrer le temps d'utilisation pour toutes les applications suivies
             current_time = time.time()
             for app, start_time in self.tracked_processes.items():
                 elapsed = int(current_time - start_time)
                 self.update_app_usage(app, elapsed)
-            
+
             # Réinitialiser les processus suivis
             self.tracked_processes = {}
         else:
-            self.auto_timer.start(5000)  # Mettre à jour toutes les 5 secondes
+            self.auto_timer.start(5000)  # Mise à jour toutes les 5 secondes
             self.auto_track_button.setText("Arrêter le suivi automatique")
             self.auto_track_button.setStyleSheet(self.get_button_style("#e74c3c"))
             self.auto_tracking_active = True
@@ -332,56 +431,51 @@ class ScreenTimePage(QWidget):
         """Met à jour la liste des applications en cours d'exécution et leur temps d'utilisation."""
         current_time = time.time()
         current_apps = {}
-        
-        # Obtenir les processus en cours d'exécution
+
         try:
-            for proc in psutil.process_iter(['name', 'pid']):
+            for proc in psutil.process_iter(['name', 'exe', 'pid']):
                 try:
-                    proc_info = proc.info
-                    proc_name = proc_info['name']
+                    exe_name = proc.info['name'].lower()
+                    # Filtrage des processus système
+                    if exe_name in self.system_processes:
+                        continue
                     
-                    # Ne suivre que les processus avec une interface graphique
-                    if proc_name.endswith('.exe') and proc_name != 'python.exe':
-                        current_apps[proc_name] = proc_info['pid']
+                    exe_path = proc.info['exe']
+                    app_name = self.get_app_from_process(exe_path)
+                    
+                    if app_name and app_name.lower() != 'python':
+                        current_apps[app_name] = proc.info['pid']
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
-                    
-            # Mettre à jour le temps pour les processus déjà suivis
+
+            # Mettre à jour le temps pour les applications déjà suivies
             for app in list(self.tracked_processes.keys()):
                 if app not in current_apps:
-                    # L'application n'est plus en cours d'exécution
                     elapsed = int(current_time - self.tracked_processes[app])
                     self.update_app_usage(app, elapsed)
                     del self.tracked_processes[app]
-            
+
             # Ajouter les nouveaux processus
             for app in current_apps:
                 if app not in self.tracked_processes:
                     self.tracked_processes[app] = current_time
-            
-            # Mettre à jour la table
+
+            # Mettre à jour la table des applications actives
             self.active_apps_table.setRowCount(len(self.tracked_processes))
-            
             row = 0
             for app in self.tracked_processes:
-                # Colonne 1: Nom de l'application
                 self.active_apps_table.setItem(row, 0, QTableWidgetItem(app))
-                
-                # Colonne 2: Temps aujourd'hui
                 app_time = self.get_app_time_today(app)
                 time_text = self.format_time(app_time)
                 self.active_apps_table.setItem(row, 1, QTableWidgetItem(time_text))
-                
-                # Colonne 3: Limite
                 limit = self.get_app_limit(app)
                 limit_text = self.format_time(limit) if limit > 0 else "Pas de limite"
                 self.active_apps_table.setItem(row, 2, QTableWidgetItem(limit_text))
-                
                 row += 1
-            
+
             # Vérifier si les limites sont dépassées
             self.check_time_limits()
-                
+
         except Exception as e:
             print(f"Erreur lors de la mise à jour des applications en cours d'exécution : {str(e)}")
 
@@ -390,36 +484,29 @@ class ScreenTimePage(QWidget):
         if self.start_time:
             self.elapsed_time = int(time.time() - self.start_time) + self.get_app_time_today(self.current_app)
             self.update_time_label()
-            
             # Vérifier si la limite est dépassée
             if self.time_limit > 0 and self.elapsed_time >= self.time_limit:
                 self.show_time_limit_warning(self.current_app)
 
     def update_app_usage(self, app_name, elapsed_seconds):
         """Met à jour les données d'utilisation pour une application."""
+        if elapsed_seconds < 0 or elapsed_seconds > 3600:  # Empêcher les valeurs aberrantes
+            return
         today = datetime.now().strftime("%Y-%m-%d")
-        
         if app_name not in self.usage_data:
             self.usage_data[app_name] = {"days": {}, "limit": 0}
-            
         if today not in self.usage_data[app_name]["days"]:
             self.usage_data[app_name]["days"][today] = elapsed_seconds
         else:
             self.usage_data[app_name]["days"][today] += elapsed_seconds
-            
-        # Sauvegarder les données
         self.save_usage_data()
-        
-        # Mettre à jour les statistiques
         self.update_stats()
 
     def get_app_time_today(self, app_name):
         """Retourne le temps d'utilisation aujourd'hui pour une application."""
         if not app_name:
             return 0
-            
         today = datetime.now().strftime("%Y-%m-%d")
-        
         if app_name in self.usage_data and today in self.usage_data[app_name]["days"]:
             return self.usage_data[app_name]["days"][today]
         return 0
@@ -432,8 +519,6 @@ class ScreenTimePage(QWidget):
 
     def check_time_limits(self):
         """Vérifie si les limites de temps sont dépassées pour les applications suivies."""
-        today = datetime.now().strftime("%Y-%m-%d")
-        
         for app in self.tracked_processes:
             limit = self.get_app_limit(app)
             if limit > 0:
@@ -443,8 +528,14 @@ class ScreenTimePage(QWidget):
 
     def show_time_limit_warning(self, app_name):
         """Affiche un avertissement lorsque la limite de temps est dépassée."""
-        limit_minutes = self.get_app_limit(app_name) // 60
+        if not hasattr(self, 'last_warning'):
+            self.last_warning = {}
+        now = time.time()
+        if app_name in self.last_warning and (now - self.last_warning[app_name]) < 300:  # 5 minutes
+            return
         
+        self.last_warning[app_name] = now
+        limit_minutes = self.get_app_limit(app_name) // 60
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
         msg.setWindowTitle("Limite de temps dépassée")
@@ -456,18 +547,12 @@ class ScreenTimePage(QWidget):
     def update_stats(self):
         """Met à jour le tableau des statistiques."""
         self.stats_table.setRowCount(len(self.usage_data))
-        
         row = 0
         for app, data in self.usage_data.items():
-            # Colonne 1: Nom de l'application
             self.stats_table.setItem(row, 0, QTableWidgetItem(app))
-            
-            # Colonne 2: Temps total
             total_time = sum(data["days"].values())
             time_text = self.format_time(total_time)
             self.stats_table.setItem(row, 1, QTableWidgetItem(time_text))
-            
-            # Colonne 3: Dernière utilisation
             if data["days"]:
                 last_date = max(data["days"].keys())
                 last_date_obj = datetime.strptime(last_date, "%Y-%m-%d")
@@ -475,7 +560,6 @@ class ScreenTimePage(QWidget):
                 self.stats_table.setItem(row, 2, QTableWidgetItem(last_date_text))
             else:
                 self.stats_table.setItem(row, 2, QTableWidgetItem("Jamais"))
-            
             row += 1
 
     def reset_stats(self):
@@ -485,7 +569,6 @@ class ScreenTimePage(QWidget):
             "Voulez-vous vraiment réinitialiser toutes les statistiques ?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
-        
         if reply == QMessageBox.Yes:
             self.usage_data = {}
             self.save_usage_data()
@@ -540,3 +623,13 @@ class ScreenTimePage(QWidget):
                 background-color: {color}70;
             }}
         """
+
+# Pour tester l'interface
+if __name__ == '__main__':
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    window = ScreenTimePage()
+    window.setWindowTitle("Gestion du Temps d'Écran")
+    window.resize(800, 600)
+    window.show()
+    sys.exit(app.exec_())

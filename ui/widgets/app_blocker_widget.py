@@ -55,7 +55,8 @@ class AppBlocker:
             json.dump(self.blocked_apps, f)
 
     def find_executable_path(self, app_name):
-        """Trouve le chemin complet de l'exécutable à partir du nom de l'application"""
+        """Trouve le chemin complet de l'exécutable à partir du nom de l'application.
+           Retourne None si aucun exécutable n'est clairement identifié."""
         if app_name in self.executable_paths:
             return self.executable_paths[app_name]
 
@@ -72,7 +73,7 @@ class AppBlocker:
     def apply_block_permissions(self, exe_path):
         """
         Applique des restrictions sur l'exécutable pour empêcher son exécution.
-        Ici, on utilise icacls pour refuser les droits de lecture et d'exécution à l'utilisateur courant.
+        Utilise icacls pour refuser les droits de lecture et d'exécution à l'utilisateur courant.
         """
         try:
             username = os.getlogin()
@@ -114,9 +115,7 @@ class AppBlocker:
         exe_path = self.find_executable_path(app_name)
         if exe_path:
             if self.apply_block_permissions(exe_path):
-                self.blocked_apps[app_name] = {
-                    'path': exe_path  # On stocke le chemin complet
-                }
+                self.blocked_apps[app_name] = {'path': exe_path}
                 self.save_config()
                 return True
             else:
@@ -142,8 +141,6 @@ class AppBlocker:
     def kill_blocked_apps(self):
         """
         Tue les processus dont le chemin complet de l'exécutable correspond à celui d'une application bloquée.
-        Cela permet d'être sûr que c'est bien l'application bloquée qui est terminée, même si le nom du
-        processus diffère.
         """
         killed_apps = []
         for app_name, info in self.blocked_apps.items():
@@ -341,9 +338,11 @@ class BlockAppsPage(QWidget):
 
     def load_installed_apps(self):
         self.apps_list.clear()
+        # N'afficher que les applications ayant un exécutable clairement identifié.
         for app in winapps.search_installed():
             if app.name and len(app.name.strip()) > 0:
-                self.add_app_to_list(app.name)
+                if self.app_blocker.find_executable_path(app.name) is not None:
+                    self.add_app_to_list(app.name)
 
     def add_app_to_list(self, name):
         item = QListWidgetItem(self.apps_list)
@@ -359,8 +358,10 @@ class BlockAppsPage(QWidget):
             status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
         row_layout.addWidget(status_label)
         row_layout.addStretch()
+        # Design amélioré du bouton de blocage/déblocage
         button = QPushButton("Débloquer" if is_blocked else "Bloquer")
-        button.setStyleSheet(self.get_button_style("#3498db" if is_blocked else "#e74c3c"))
+        button.setMinimumWidth(120)
+        button.setStyleSheet(self.get_block_button_style(is_blocked))
         button.clicked.connect(lambda _, n=name, b=button, s=status_label: self.toggle_block_app(n, b, s))
         row_layout.addWidget(button)
         row_widget.setLayout(row_layout)
@@ -375,6 +376,7 @@ class BlockAppsPage(QWidget):
                 button.setText("Bloquer")
                 status_label.setText("")
                 status_label.setStyleSheet("")
+                button.setStyleSheet(self.get_block_button_style(False))
             else:
                 QMessageBox.warning(self, "Erreur", f"Impossible de débloquer {app_name}.")
         else:
@@ -384,10 +386,12 @@ class BlockAppsPage(QWidget):
                 button.setText("Débloquer")
                 status_label.setText("BLOQUÉE")
                 status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+                button.setStyleSheet(self.get_block_button_style(True))
             else:
                 QMessageBox.warning(self, "Erreur", f"Impossible de bloquer {app_name}. L'exécutable n'a pas été trouvé ou les permissions n'ont pas pu être modifiées.")
 
     def get_button_style(self, color):
+        """Style de base pour les boutons"""
         return f"""
         QPushButton {{
             background-color: {color};
@@ -404,6 +408,47 @@ class BlockAppsPage(QWidget):
             background-color: {color}70;
         }}
         """.strip()
+
+    def get_block_button_style(self, is_blocked):
+        """Style spécifique pour le bouton de blocage/déblocage avec des icônes et une apparence améliorée."""
+        if is_blocked:
+            # Style pour bouton 'Débloquer'
+            return """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: 2px solid #2980b9;
+                border-radius: 5px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #2471a3;
+            }
+            """.strip()
+        else:
+            # Style pour bouton 'Bloquer'
+            return """
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: 2px solid #c0392b;
+                border-radius: 5px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+            QPushButton:pressed {
+                background-color: #a93226;
+            }
+            """.strip()
 
     def get_list_style(self):
         return """

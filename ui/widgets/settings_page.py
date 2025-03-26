@@ -205,13 +205,3 @@ class SettingsPage(QWidget):
     def update_notification_settings(self, email, notifications_enabled):
         # Exemple : sauvegarde des paramètres de notification
         print(f"Email : {email}, Notifications activées : {notifications_enabled}")
-
-if __name__ == '__main__':
-    import sys
-    from PyQt5.QtWidgets import QApplication, QMessageBox
-    app = QApplication(sys.argv)
-    window = SettingsPage()
-    window.setWindowTitle("Paramètres de l'utilisateur")
-    window.resize(500, 600)
-    window.show()
-    sys.exit(app.exec_())

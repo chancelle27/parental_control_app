@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
-# Importer les fonctions des modules utils
+# Importer les fonctions utilitaires pour le blocage et le filtrage
 from utils.site_blocker import block_site, unblock_site, is_site_blocked
 from utils.keyword_filter import load_blocked_keywords, KeywordFilter
 
@@ -40,11 +40,8 @@ class BlockSitesPage(QWidget):
         title.setStyleSheet("color: #e74c3c; margin-bottom: 20px;")
         layout.addWidget(title)
         
-        # Onglets pour les sites et les mots-clés
-        # Créer un QTabWidget
+        # Création des onglets
         self.tabs = QTabWidget()
-
-        # Appliquer le style au QTabWidget
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #bdc3c7;
@@ -52,12 +49,10 @@ class BlockSitesPage(QWidget):
                 background-color: #ffffff;
                 margin: 0px;
                 padding: 10px;
-               
             }
-            
             QTabBar::tab {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                        stop: 0 #ecf0f1, stop: 1 #bdc3c7);
+                                            stop: 0 #ecf0f1, stop: 1 #bdc3c7);
                 border: 1px solid #bdc3c7;
                 border-bottom-color: #bdc3c7;
                 border-top-left-radius: 8px;
@@ -69,28 +64,26 @@ class BlockSitesPage(QWidget):
                 margin-right: 5px;
                 width: 300px;
             }
-            
             QTabBar::tab:selected {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                        stop: 0 #3498db, stop: 1 #2980b9);
+                                            stop: 0 #3498db, stop: 1 #2980b9);
                 border: 1px solid #2980b9;
                 border-bottom-color: #ffffff;
                 color: white;
             }
-            
             QTabBar::tab:hover {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                        stop: 0 #3498db, stop: 1 #2980b9);
+                                            stop: 0 #3498db, stop: 1 #2980b9);
                 border: 1px solid #2980b9;
                 color: white;
             }
         """)
-
+        
         # Onglet pour les sites bloqués
         self.site_tab = QWidget()
         self.init_site_tab()
         self.tabs.addTab(self.site_tab, "Sites Bloqués")
-
+        
         # Onglet pour les mots-clés bloqués
         self.keyword_tab = QWidget()
         self.init_keyword_tab()
@@ -102,6 +95,24 @@ class BlockSitesPage(QWidget):
         self.load_blocked_sites()
         self.load_blocked_keywords()
 
+        # Bouton de simulation d'accès à un site bloqué
+        self.simulate_button = QPushButton("Simuler tentative d'accès")
+        self.simulate_button.setStyleSheet("""
+            QPushButton {
+                background-color: #8e44ad;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+                border-radius: 5px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #71368a;
+            }
+        """)
+        self.simulate_button.clicked.connect(self.simulate_access_attempt)
+        layout.addWidget(self.simulate_button)
+    
     def init_site_tab(self):
         """Initialise l'onglet pour les sites bloqués."""
         layout = QVBoxLayout(self.site_tab)
@@ -122,9 +133,8 @@ class BlockSitesPage(QWidget):
         """)
         layout.addWidget(self.site_input)
         
-        # Boutons "Ajouter" et "Supprimer" pour les sites
+        # Boutons Ajouter et Supprimer pour les sites
         button_layout = QHBoxLayout()
-        
         self.add_site_button = QPushButton("Ajouter le site")
         self.add_site_button.setStyleSheet("""
             QPushButton {
@@ -202,9 +212,8 @@ class BlockSitesPage(QWidget):
         """)
         layout.addWidget(self.keyword_input)
         
-        # Boutons "Ajouter" et "Supprimer" pour les mots-clés
+        # Boutons Ajouter et Supprimer pour les mots-clés
         button_layout = QHBoxLayout()
-        
         self.add_keyword_button = QPushButton("Ajouter le mot-clé")
         self.add_keyword_button.setStyleSheet("""
             QPushButton {
@@ -268,40 +277,26 @@ class BlockSitesPage(QWidget):
             if is_site_blocked(site_url):
                 QMessageBox.warning(self, "Erreur", "Ce site est déjà bloqué.")
                 return
-            
+            # Bloquer le site via le module utilitaire
             block_site(site_url)
+            # Mise à jour du fichier hosts
+            try:
+                with open(HOSTS_PATH, "a") as file:
+                    file.write(f"127.0.0.1 {site_url}\n")
+                    file.write(f"127.0.0.1 www.{site_url}\n")
+            except PermissionError:
+                QMessageBox.critical(self, "Erreur", "Permission refusée. Exécutez le programme en tant qu'administrateur.")
+                return
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"Erreur lors du blocage du site : {e}")
+                return
+
             self.blocked_sites_list.addItem(site_url)
             self.site_input.clear()
-            self.send_email_notification(site_url)
+            # Optionnel : envoyer un mail dès qu'un site est ajouté
+            # self.send_email_notification(site_url)
         else:
             QMessageBox.warning(self, "Erreur", "Veuillez entrer une URL valide.")
-        try:
-            with open(HOSTS_PATH, "a") as file:
-                file.write(f"127.0.0.1 {site_url}\n")
-                file.write(f"127.0.0.1 www.{site_url}\n")
-            return True
-        except PermissionError:
-            print("Permission refusée. Exécutez le programme en tant qu'administrateur.")
-            return False
-        except Exception as e:
-            print(f"Erreur lors du blocage du site : {e}")
-            return False
-    
-    def add_blocked_keyword(self):
-        keyword = self.keyword_input.text().strip()
-        if keyword:
-            if keyword in load_blocked_keywords():
-                QMessageBox.warning(self, "Erreur", "Ce mot-clé est déjà bloqué.")
-                return
-            
-            with open("data/blocked_keywords.txt", "a") as file:
-                file.write(f"{keyword}\n")
-            
-            self.blocked_keywords_list.addItem(keyword)
-            self.keyword_input.clear()
-            self.send_email_notification(f"Mot-clé : {keyword}")
-        else:
-            QMessageBox.warning(self, "Erreur", "Veuillez entrer un mot-clé valide.")
 
     def remove_blocked_site(self):
         selected_item = self.blocked_sites_list.currentItem()
@@ -312,18 +307,31 @@ class BlockSitesPage(QWidget):
         else:
             QMessageBox.warning(self, "Erreur", "Sélectionnez un site à supprimer.")
 
+    def add_blocked_keyword(self):
+        keyword = self.keyword_input.text().strip()
+        if keyword:
+            if keyword in load_blocked_keywords():
+                QMessageBox.warning(self, "Erreur", "Ce mot-clé est déjà bloqué.")
+                return
+            with open("data/blocked_keywords.txt", "a") as file:
+                file.write(f"{keyword}\n")
+            self.blocked_keywords_list.addItem(keyword)
+            self.keyword_input.clear()
+            # Optionnel : envoyer un mail pour le blocage d'un mot-clé
+            # self.send_email_notification(f"Mot-clé : {keyword}")
+        else:
+            QMessageBox.warning(self, "Erreur", "Veuillez entrer un mot-clé valide.")
+
     def remove_blocked_keyword(self):
         selected_item = self.blocked_keywords_list.currentItem()
         if selected_item:
             keyword = selected_item.text()
             with open("data/blocked_keywords.txt", "r") as file:
                 keywords = file.readlines()
-            
             with open("data/blocked_keywords.txt", "w") as file:
                 for kw in keywords:
                     if kw.strip() != keyword:
                         file.write(kw)
-            
             self.blocked_keywords_list.takeItem(self.blocked_keywords_list.row(selected_item))
         else:
             QMessageBox.warning(self, "Erreur", "Sélectionnez un mot-clé à supprimer.")
@@ -332,30 +340,31 @@ class BlockSitesPage(QWidget):
         """Charge les sites bloqués depuis le fichier hosts."""
         if not os.path.exists(HOSTS_PATH):
             return
-        
         with open(HOSTS_PATH, "r") as file:
             lines = file.readlines()
-        
         for line in lines:
             if line.startswith("127.0.0.1") and len(line.split()) > 1:
                 site = line.split()[1].strip()
-                self.blocked_sites_list.addItem(site)
+                # Éviter d'ajouter en double certains domaines génériques
+                if site and self.blocked_sites_list.findItems(site, Qt.MatchExactly) == []:
+                    self.blocked_sites_list.addItem(site)
     
     def load_blocked_keywords(self):
         """Charge les mots-clés bloqués depuis un fichier."""
         if not os.path.exists("data/blocked_keywords.txt"):
             return
-        
         with open("data/blocked_keywords.txt", "r") as file:
             keywords = file.readlines()
-        
         for keyword in keywords:
             self.blocked_keywords_list.addItem(keyword.strip())
 
     def send_email_notification(self, content):
-        """Envoie un e-mail de notification via MailHog."""
-        subject = f"Tentative d'accès à un contenu bloqué : {content}"
-        body = f"Une tentative d'accès au contenu bloqué {content} a été détectée."
+        """
+        Envoie un e-mail via MailHog pour notifier qu'une tentative d'accès a été détectée.
+        Le contenu doit indiquer le site bloqué ou le mot-clé concerné.
+        """
+        subject = f"Accès interdit détecté : {content}"
+        body = f"Quelqu'un a tenté d'accéder au contenu bloqué : {content}."
 
         msg = MIMEMultipart()
         msg["From"] = MAILHOG_FROM_EMAIL
@@ -369,3 +378,28 @@ class BlockSitesPage(QWidget):
             print(f"Email envoyé pour {content}")
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur d'envoi du mail : {e}")
+
+    def simulate_access_attempt(self):
+        """
+        Méthode de simulation d'une tentative d'accès à un site bloqué.
+        Elle vérifie si le site est bloqué et envoie une notification par e-mail.
+        """
+        site_url = self.site_input.text().strip()
+        if not site_url:
+            QMessageBox.warning(self, "Erreur", "Entrez l'URL du site à simuler.")
+            return
+
+        if is_site_blocked(site_url):
+            # Simuler une tentative d'accès détectée
+            QMessageBox.information(self, "Accès Bloqué", f"Une tentative d'accès au site bloqué '{site_url}' a été détectée.")
+            self.send_email_notification(site_url)
+        else:
+            QMessageBox.information(self, "Accès Autorisé", f"Le site '{site_url}' n'est pas bloqué.")
+
+# Si vous souhaitez lancer ce widget directement pour des tests, vous pouvez ajouter :
+if __name__ == "__main__":
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    window = BlockSitesPage()
+    window.show()
+    sys.exit(app.exec_())
