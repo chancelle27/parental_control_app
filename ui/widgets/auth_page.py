@@ -311,8 +311,11 @@ class AuthPage(QWidget):
                 if self.save_credentials(username, password_hash):
                     QMessageBox.information(self, "Succès", "Identifiants enregistrés avec succès!")
                     self.main_window.show_dashboard()
+                
         else:
             if self.verify_credentials(username, password_hash):
+                self.username_input.clear()
+                self.password_input.clear()
                 self.main_window.show_dashboard()
             else:
                 QMessageBox.warning(self, "Erreur", "Identifiants incorrects")

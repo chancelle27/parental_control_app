@@ -1,207 +1,242 @@
+import sqlite3
+import hashlib
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, 
+    QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, 
     QCheckBox, QFrame, QMessageBox, QGraphicsDropShadowEffect
 )
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import Qt
 
 class SettingsPage(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
+        self.db_path = 'user_credentials.db'
+        self.admin_username = "admin"  # Nom d'utilisateur fixe
+        self.init_db()
         self.initUI()
 
-    def initUI(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignTop)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(20)
+    def init_db(self):
+        """Initialise la base de données avec l'utilisateur admin si nécessaire"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL
+                )
+            """)
+            # Créer l'admin avec mot de passe par défaut 'admin' si non existant
+            cursor.execute("""
+                INSERT OR IGNORE INTO users (username, password_hash)
+                VALUES (?, ?)
+            """, (self.admin_username, hashlib.sha256("admin".encode()).hexdigest()))
+            conn.commit()
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Erreur DB", f"Erreur base de données : {str(e)}")
+        finally:
+            if conn:
+                conn.close()
 
-        # Titre principal
-        title = QLabel("Paramètres de l'utilisateur")
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+
+        # Titre
+        title = QLabel("Paramètres Administrateur")
         title.setFont(QFont("Arial", 24, QFont.Bold))
         title.setStyleSheet("color: #2c3e50;")
         title.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title)
+        layout.addWidget(title)
 
-        # ----- Carte : Modification du mot de passe ----- #
-        account_card = QFrame()
-        account_card.setStyleSheet("""
+        # Carte Mot de passe
+        password_card = self.create_card("Modifier le mot de passe admin", self.create_password_form())
+        layout.addWidget(password_card)
+
+        # Carte Notifications
+        notification_card = self.create_card("Paramètres de notification", self.create_notification_form())
+        layout.addWidget(notification_card)
+
+    def create_card(self, title, content):
+        """Crée une carte stylisée"""
+        card = QFrame()
+        card.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background: white;
                 border-radius: 15px;
                 padding: 20px;
             }
         """)
-        account_layout = QVBoxLayout(account_card)
-        account_layout.setSpacing(15)
-
-        account_title = QLabel("Modifier le mot de passe")
-        account_title.setFont(QFont("Arial", 18, QFont.Bold))
-        account_title.setStyleSheet("color: #34495e;")
-        account_layout.addWidget(account_title)
-
-        self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Nouveau mot de passe")
-        self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #bdc3c7;
-                border-radius: 10px;
-                font-size: 16px;
-                padding: 10px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3498db;
-                background-color: white;
-            }
-        """)
-        account_layout.addWidget(self.password_input)
-
-        self.confirm_password_input = QLineEdit()
-        self.confirm_password_input.setPlaceholderText("Confirmer le mot de passe")
-        self.confirm_password_input.setEchoMode(QLineEdit.Password)
-        self.confirm_password_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #bdc3c7;
-                border-radius: 10px;
-                font-size: 16px;
-                padding: 10px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #3498db;
-                background-color: white;
-            }
-        """)
-        account_layout.addWidget(self.confirm_password_input)
-
-        save_account_button = QPushButton("Sauvegarder le mot de passe")
-        save_account_button.setFont(QFont("Arial", 16))
-        save_account_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                padding: 10px;
-                border-radius: 10px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #1c6ea4;
-            }
-        """)
-        save_account_button.clicked.connect(self.save_account_settings)
-        account_layout.addWidget(save_account_button)
-
-        # Ajout d'une ombre portée pour la carte
+        layout = QVBoxLayout(card)
+        
+        # Titre de la carte
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Arial", 16, QFont.Bold))
+        lbl_title.setStyleSheet("color: #34495e; margin-bottom: 15px;")
+        layout.addWidget(lbl_title)
+        
+        # Contenu
+        layout.addWidget(content)
+        
+        # Ombre
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(15)
-        shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        account_card.setGraphicsEffect(shadow)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        card.setGraphicsEffect(shadow)
+        
+        return card
 
-        main_layout.addWidget(account_card)
+    def create_password_form(self):
+        """Formulaire de changement de mot de passe"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(15)
 
-        # ----- Carte : Paramètres de Notification ----- #
-        notification_card = QFrame()
-        notification_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                padding: 20px;
-            }
-        """)
-        notif_layout = QVBoxLayout(notification_card)
-        notif_layout.setSpacing(15)
+        self.txt_new_pass = QLineEdit()
+        self.txt_new_pass.setPlaceholderText("Nouveau mot de passe")
+        self.txt_new_pass.setEchoMode(QLineEdit.Password)
+        self.style_input(self.txt_new_pass)
+        
+        self.txt_confirm_pass = QLineEdit()
+        self.txt_confirm_pass.setPlaceholderText("Confirmer le mot de passe")
+        self.txt_confirm_pass.setEchoMode(QLineEdit.Password)
+        self.style_input(self.txt_confirm_pass)
 
-        notif_title = QLabel("Paramètres de Notification")
-        notif_title.setFont(QFont("Arial", 18, QFont.Bold))
-        notif_title.setStyleSheet("color: #34495e;")
-        notif_layout.addWidget(notif_title)
+        btn_save = QPushButton("Enregistrer le mot de passe")
+        btn_save.clicked.connect(self.update_admin_password)
+        self.style_button(btn_save, "#3498db", "#2980b9")
 
-        self.email_input = QLineEdit()
-        self.email_input.setPlaceholderText("Email pour les notifications")
-        self.email_input.setStyleSheet("""
+        layout.addWidget(self.txt_new_pass)
+        layout.addWidget(self.txt_confirm_pass)
+        layout.addWidget(btn_save)
+        
+        return container
+
+    def create_notification_form(self):
+        """Formulaire de notifications"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(15)
+
+        self.txt_email = QLineEdit()
+        self.txt_email.setPlaceholderText("Email de notification")
+        self.style_input(self.txt_email)
+        
+        self.chk_notifications = QCheckBox("Activer les notifications par email")
+        self.chk_notifications.setStyleSheet("font-size: 14px; color: #2c3e50;")
+
+        btn_save = QPushButton("Enregistrer les préférences")
+        btn_save.clicked.connect(self.save_notification_settings)
+        self.style_button(btn_save, "#1abc9c", "#16a085")
+
+        layout.addWidget(self.txt_email)
+        layout.addWidget(self.chk_notifications)
+        layout.addWidget(btn_save)
+        
+        return container
+
+    def style_input(self, widget):
+        """Style commun pour les champs de saisie"""
+        widget.setStyleSheet("""
             QLineEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #bdc3c7;
-                border-radius: 10px;
-                font-size: 16px;
+                background: #f8f9fa;
+                border: 1px solid #ced4da;
+                border-radius: 8px;
                 padding: 10px;
+                font-size: 14px;
             }
             QLineEdit:focus {
                 border: 1px solid #3498db;
-                background-color: white;
             }
         """)
-        notif_layout.addWidget(self.email_input)
 
-        self.notifications_checkbox = QCheckBox("Activer les notifications")
-        self.notifications_checkbox.setStyleSheet("font-size: 16px; color: #2c3e50;")
-        notif_layout.addWidget(self.notifications_checkbox)
-
-        save_notif_button = QPushButton("Sauvegarder les notifications")
-        save_notif_button.setFont(QFont("Arial", 16))
-        save_notif_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1abc9c;
+    def style_button(self, button, normal_color, hover_color):
+        """Style commun pour les boutons"""
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background: {normal_color};
                 color: white;
-                padding: 10px;
-                border-radius: 10px;
-            }
-            QPushButton:hover {
-                background-color: #16a085;
-            }
-            QPushButton:pressed {
-                background-color: #149174;
-            }
+                border: none;
+                padding: 12px;
+                border-radius: 8px;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background: {hover_color};
+            }}
         """)
-        save_notif_button.clicked.connect(self.save_notification_settings)
-        notif_layout.addWidget(save_notif_button)
 
-        shadow2 = QGraphicsDropShadowEffect()
-        shadow2.setBlurRadius(15)
-        shadow2.setXOffset(0)
-        shadow2.setYOffset(2)
-        shadow2.setColor(QColor(0, 0, 0, 80))
-        notification_card.setGraphicsEffect(shadow2)
+    def update_admin_password(self):
+        """Met à jour le mot de passe admin"""
+        new_pass = self.txt_new_pass.text().strip()
+        confirm_pass = self.txt_confirm_pass.text().strip()
 
-        main_layout.addWidget(notification_card)
-
-    def save_account_settings(self):
-        new_password = self.password_input.text().strip()
-        confirm_password = self.confirm_password_input.text().strip()
-
-        if not new_password or not confirm_password:
-            QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs du mot de passe.")
+        if not new_pass or not confirm_pass:
+            QMessageBox.warning(self, "Champs vides", "Veuillez remplir tous les champs")
             return
-        if new_password != confirm_password:
-            QMessageBox.warning(self, "Erreur", "Les mots de passe ne correspondent pas.")
+            
+        if new_pass != confirm_pass:
+            QMessageBox.warning(self, "Erreur", "Les mots de passe ne correspondent pas")
             return
 
-        # Logique pour mettre à jour le mot de passe (exemple : mise à jour dans une base de données)
-        self.update_account_settings(new_password)
-        QMessageBox.information(self, "Succès", "Le mot de passe a été mis à jour.")
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            new_hash = hashlib.sha256(new_pass.encode()).hexdigest()
+            
+            cursor.execute("""
+                UPDATE users 
+                SET password_hash = ?
+                WHERE username = ?
+            """, (new_hash, self.admin_username))
+            
+            conn.commit()
+            QMessageBox.information(self, "Succès", "Mot de passe mis à jour avec succès")
+            
+            # Vider les champs
+            self.txt_new_pass.clear()
+            self.txt_confirm_pass.clear()
+            
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Erreur DB", f"Erreur de mise à jour : {str(e)}")
+        finally:
+            if conn:
+                conn.close()
 
     def save_notification_settings(self):
-        email = self.email_input.text().strip()
-        notifications_enabled = self.notifications_checkbox.isChecked()
-
+        """Enregistre les paramètres de notification"""
+        email = self.txt_email.text().strip()
+        
         if not email:
-            QMessageBox.warning(self, "Erreur", "Veuillez renseigner un email pour les notifications.")
+            QMessageBox.warning(self, "Email manquant", "Veuillez saisir un email")
             return
 
-        # Logique pour mettre à jour les paramètres de notification
-        self.update_notification_settings(email, notifications_enabled)
-        QMessageBox.information(self, "Succès", "Les paramètres de notification ont été mis à jour.")
-
-    def update_account_settings(self, new_password):
-        # Exemple : mise à jour dans une base de données ou fichier de configuration
-        print(f"Nouveau mot de passe enregistré : {new_password}")
-
-    def update_notification_settings(self, email, notifications_enabled):
-        # Exemple : sauvegarde des paramètres de notification
-        print(f"Email : {email}, Notifications activées : {notifications_enabled}")
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Créer la table si nécessaire
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    username TEXT PRIMARY KEY,
+                    email TEXT,
+                    enabled INTEGER DEFAULT 0
+                )
+            """)
+            
+            # Mettre à jour les paramètres
+            cursor.execute("""
+                INSERT OR REPLACE INTO notifications 
+                (username, email, enabled)
+                VALUES (?, ?, ?)
+            """, (self.admin_username, email, int(self.chk_notifications.isChecked())))
+            
+            conn.commit()
+            QMessageBox.information(self, "Succès", "Paramètres enregistrés")
+            
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Erreur DB", f"Erreur d'enregistrement : {str(e)}")
+        finally:
+            if conn:
+                conn.close()

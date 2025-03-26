@@ -11,11 +11,9 @@ from ui.widgets.home_page import HomePage
 from ui.widgets.app_blocker_widget import BlockAppsPage
 from ui.widgets.screen_time_widget import ScreenTimePage
 from ui.widgets.site_blocker_widget import BlockSitesPage
-from ui.widgets.home_page import HomePage
 from ui.widgets.settings_page import SettingsPage
 from ui.widgets.reports_page import ReportPage
 
-# Fenêtre principale
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -37,7 +35,7 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.stack)
 
         # Page d'authentification
-        self.auth_page = AuthPage(self)  # Utilisation de la classe AuthPage importée
+        self.auth_page = AuthPage(self)
         self.stack.addWidget(self.auth_page)
 
         # Initialiser les pages du tableau de bord
@@ -45,8 +43,6 @@ class MainWindow(QMainWindow):
 
         # Suivi de l'état de connexion
         self.is_logged_in = False
-        
-        
 
     def init_dashboard_pages(self):
         # Créer les pages du tableau de bord
@@ -58,17 +54,16 @@ class MainWindow(QMainWindow):
             "reports": ReportPage(),
             "settings": SettingsPage()
         }
-
         # Ajouter les pages au stacked widget
         for page in self.pages.values():
             self.stack.addWidget(page)
 
     def show_dashboard(self):
         self.is_logged_in = True
-        # Basculer vers le tableau de bord
+        # Basculer vers la page d'accueil du dashboard
         self.stack.setCurrentWidget(self.pages["home"])
 
-        # Ajouter la sidebar
+        # Création de la sidebar (QListWidget)
         self.sidebar = QListWidget()
         self.sidebar.setFixedWidth(200)
         self.sidebar.setStyleSheet("""
@@ -95,7 +90,7 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # Pages disponibles dans la sidebar
+        # Ajouter les éléments de navigation dans la sidebar
         pages = [
             ("Accueil", "home"),
             ("Blocage de Sites", "block_sites"),
@@ -103,18 +98,35 @@ class MainWindow(QMainWindow):
             ("Temps d'Écran", "screen_time"),
             ("Rapports", "reports"),
             ("Paramètres", "settings"),
+            ("Déconnexion", "logout")
         ]
-
         for name, key in pages:
             item = QListWidgetItem(name)
             item.setData(Qt.UserRole, key)
             self.sidebar.addItem(item)
-
         self.sidebar.currentItemChanged.connect(self.change_page)
 
-        # Ajouter la sidebar au layout
+        # Insérer la sidebar dans le layout principal (à gauche)
         self.layout.insertWidget(0, self.sidebar)
         self.sidebar.setCurrentRow(0)
+
+    def change_page(self, current_item):
+        if current_item:
+            page_key = current_item.data(Qt.UserRole)
+            if page_key == "logout":
+                self.logout()
+            else:
+                self.stack.setCurrentWidget(self.pages[page_key])
+
+    def logout(self):
+        """Méthode de déconnexion qui ramène à la page d'authentification."""
+        self.is_logged_in = False
+        # Réinitialiser la sidebar
+        if self.sidebar is not None:
+            self.sidebar.deleteLater()
+            self.sidebar = None
+        # Revenir à la page d'authentification
+        self.stack.setCurrentWidget(self.auth_page)
 
     def create_home_page(self):
         page = QWidget()
@@ -153,12 +165,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(content)
 
         return page
-
-    def change_page(self, current_item):
-        if current_item:
-            page_key = current_item.data(Qt.UserRole)
-            self.stack.setCurrentWidget(self.pages[page_key])
-
 
 # Point d'entrée de l'application
 if __name__ == "__main__":
